@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <title>Familienbudget – Fixkosten-Rechner</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f4f4f4; }
+        header { background: #2c3e50; color: #fff; padding: 1rem 2rem; }
+        main { padding: 1rem 2rem 3rem; max-width: 1200px; margin: 0 auto; }
+        h1, h2 { margin-top: 0; }
+        .summary-boxes { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; }
+        .box { background: #fff; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); min-width: 220px; }
+        .box span.value { font-size: 1.4rem; font-weight: bold; display: block; margin-top: 0.3rem; }
+        .positive { color: #27ae60; }
+        .negative { color: #c0392b; }
+        a.button { display: inline-block; padding: 0.4rem 0.8rem; background: #3498db; color: #fff; text-decoration: none; border-radius: 4px; margin-right: 0.5rem; }
+        a.button:hover { background: #2980b9; }
+        .charts { display: flex; flex-wrap: wrap; gap: 2rem; margin-top: 2rem; }
+        .chart-container { background: #fff; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex: 1 1 320px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; background: #fff; }
+        th, td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+        th { background: #ecf0f1; text-align: left; }
+        .table-wrapper { margin-top: 2rem; }
+        .explanation { margin-bottom: 1rem; font-size: 0.9rem; color: #555; }
+        .action-link { font-size: 0.85rem; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<header>
+    <h1>Familienbudget – Fixkosten & Verteilung</h1>
+</header>
+<main>
+    <section class="explanation">
+        <p>
+            Diese Ansicht arbeitet mit <strong>monatlichen Durchschnittswerten</strong>:
+            Du trägst alle monatlichen, vierteljährlichen oder jährlichen Fixkosten ein.
+            Jährliche und vierteljährliche Beträge werden automatisch auf einen
+            <strong>monatlichen Durchschnitt</strong> umgerechnet.
+        </p>
+        <ul>
+            <li>Gesamte monatliche Einnahmen und Ausgaben (inkl. Umrechnung)</li>
+            <li>Gemeinsame Fixkosten (markierte Ausgaben)</li>
+            <li>Wieviel Andreas und Katharina jeweils zu den Fixkosten beitragen sollen
+                (proportional zu ihrem Einkommen, abzüglich Kindergeld / Großeltern-Einnahmen).</li>
+        </ul>
+    </section>
+
+    <section class="summary-boxes">
+        <div class="box">
+            <strong>Gesamte monatliche Einnahmen</strong>
+            <span class="value positive">{{ "%.2f"|format(total_income) }} €</span>
+        </div>
+        <div class="box">
+            <strong>Gesamte monatliche Ausgaben (umgerechnet)</strong>
+            <span class="value negative">{{ "%.2f"|format(total_expense) }} €</span>
+        </div>
+        <div class="box">
+            <strong>Gemeinsame Fixkosten (monatlich)</strong>
+            <span class="value negative">{{ "%.2f"|format(shared_expenses) }} €</span>
+        </div>
+        <div class="box">
+            <strong>Sonstige Familieneinnahmen (z.B. Kindergeld, Großeltern)</strong>
+            <span class="value positive">{{ "%.2f"|format(extra_family_income) }} €</span>
+        </div>
+        <div class="box">
+            <strong>Fixkosten nach Abzug dieser Einnahmen</strong>
+            <span class="value negative">{{ "%.2f"|format(cost_to_split) }} €</span>
+        </div>
+        <div class="box">
+            <strong>Saldo (Einnahmen - Ausgaben)</strong>
+            <span class="value {% if remaining >= 0 %}positive{% else %}negative{% endif %}">
+                {{ "%.2f"|format(remaining) }} €
+            </span>
+        </div>
+    </section>
+
+    <section class="summary-boxes">
+        <div class="box">
+            <strong>Einkommen Andreas</strong>
+            <span class="value">{{ "%.2f"|format(andreas_income) }} €</span>
+        </div>
+        <div class="box">
+            <strong>Einkommen Katharina</strong>
+            <span class="value">{{ "%.2f"|format(katharina_income) }} €</span>
+        </div>
+        <div class="box">
+            <strong>Beitrag Andreas zu Fixkosten</strong>
+            <span class="value">
+                {% if andreas_share is not none %}
+                    {{ "%.2f"|format(andreas_share) }} €
+                {% else %}
+                    – 
+                {% endif %}
+            </span>
+        </div>
+        <div class="box">
+            <strong>Beitrag Katharina zu Fixkosten</strong>
+            <span class="value">
+                {% if katharina_share is not none %}
+                    {{ "%.2f"|format(katharina_share) }} €
+                {% else %}
+                    – 
+                {% endif %}
+            </span>
+        </div>
+    </section>
+
+    <section>
+        <a href="{{ url_for('add_income') }}" class="button">Monatliche Einnahme hinzufügen</a>
+        <a href="{{ url_for('add_expense') }}" class="button">Fixkosten hinzufügen</a>
+    </section>
+
+    <section class="charts">
+        <div class="chart-container">
+            <h2>Einnahmen nach Person</h2>
+            <canvas id="incomeChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h2>Ausgaben nach Kategorie (monatlich)</h2>
+            <canvas id="expenseChart"></canvas>
+        </div>
+    </section>
+
+    <section class="table-wrapper">
+        <h2>Monatliche Einnahmen (Liste)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Person</th>
+                    <th>Quelle</th>
+                    <th>Betrag (€)</th>
+                    <th>Aktion</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for i in incomes %}
+                <tr>
+                    <td>{{ i.person }}</td>
+                    <td>{{ i.source }}</td>
+                    <td style="text-align:right;">{{ "%.2f"|format(i.amount) }}</td>
+                    <td class="action-link">
+                        <a href="{{ url_for('edit_income', index=loop.index0) }}">Bearbeiten</a>
+                    </td>
+                </tr>
+            {% endfor %}
+            {% if incomes|length == 0 %}
+                <tr><td colspan="4">Noch keine Einnahmen erfasst.</td></tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </section>
+
+    <section class="table-wrapper">
+        <h2>Fixkosten (Original & monatlich)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Kategorie</th>
+                    <th>Person / Konto</th>
+                    <th>Beschreibung</th>
+                    <th>Gemeinsame Fixkosten?</th>
+                    <th>Intervall</th>
+                    <th>Betrag (Intervall €)</th>
+                    <th>Betrag monatlich (€)</th>
+                    <th>Aktion</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for e in expenses %}
+                <tr>
+                    <td>{{ e.category }}</td>
+                    <td>{{ e.person_or_account }}</td>
+                    <td>{{ e.description }}</td>
+                    <td>{{ e.is_shared }}</td>
+                    <td>
+                        {% if e.frequency == "yearly" %}
+                            jährlich
+                        {% elif e.frequency == "quarterly" %}
+                            vierteljährlich
+                        {% else %}
+                            monatlich
+                        {% endif %}
+                    </td>
+                    <td style="text-align:right;">{{ "%.2f"|format(e.amount) }}</td>
+                    <td style="text-align:right;">{{ "%.2f"|format(e.monthly_amount) }}</td>
+                    <td class="action-link">
+                        <a href="{{ url_for('edit_expense', index=loop.index0) }}">Bearbeiten</a>
+                    </td>
+                </tr>
+            {% endfor %}
+            {% if expenses|length == 0 %}
+                <tr><td colspan="8">Noch keine Ausgaben erfasst.</td></tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </section>
+</main>
+
+<script>
+    const incomeLabels = {{ income_by_person.keys()|list|tojson }};
+    const incomeData = {{ income_by_person.values()|list|tojson }};
+    const expenseLabels = {{ expense_by_category.keys()|list|tojson }};
+    const expenseData = {{ expense_by_category.values()|list|tojson }};
+
+    const ctxIncome = document.getElementById('incomeChart').getContext('2d');
+    new Chart(ctxIncome, {
+        type: 'pie',
+        data: { labels: incomeLabels, datasets: [{ data: incomeData }] },
+        options: { plugins: { legend: { position: 'bottom' } } }
+    });
+
+    const ctxExpense = document.getElementById('expenseChart').getContext('2d');
+    new Chart(ctxExpense, {
+        type: 'pie',
+        data: { labels: expenseLabels, datasets: [{ data: expenseData }] },
+        options: { plugins: { legend: { position: 'bottom' } } }
+    });
+</script>
+</body>
+</html>
