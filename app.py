@@ -5,8 +5,8 @@ from collections import defaultdict
 
 app = Flask(__name__)
 
-INCOME_CSV = "incomes.csv"
-EXPENSE_CSV = "expenses.csv"
+INCOME_CSV = "data/incomes.csv"
+EXPENSE_CSV = "data/expenses.csv"
 
 
 def migrate_expense_csv_if_needed():

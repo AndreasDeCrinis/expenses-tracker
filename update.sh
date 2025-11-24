@@ -1,3 +1,3 @@
 git pull
-docker build --tag expense-tracker .
+docker build --tag tracker .
 docker restart expense-tracker
