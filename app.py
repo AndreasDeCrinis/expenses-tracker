@@ -5,12 +5,34 @@ from collections import defaultdict
 
 app = Flask(__name__)
 
-INCOME_CSV = "data/incomes.csv"
-EXPENSE_CSV = "data/expenses.csv"
+# --- Store CSVs in data/ subfolder -----------------------------------
+DATA_DIR = "data"
+INCOME_CSV = os.path.join(DATA_DIR, "incomes.csv")
+EXPENSE_CSV = os.path.join(DATA_DIR, "expenses.csv")
+
+
+def ensure_data_dir():
+    """Make sure the data/ directory exists."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+
+def migrate_old_csvs():
+    """
+    If old CSVs (incomes.csv / expenses.csv) exist in the project root
+    and there are no files in data/ yet, move them once.
+    """
+    old_incomes = "incomes.csv"
+    old_expenses = "expenses.csv"
+
+    if os.path.exists(old_incomes) and not os.path.exists(INCOME_CSV):
+        os.rename(old_incomes, INCOME_CSV)
+
+    if os.path.exists(old_expenses) and not os.path.exists(EXPENSE_CSV):
+        os.rename(old_expenses, EXPENSE_CSV)
 
 
 def migrate_expense_csv_if_needed():
-    """Migrate existing expenses.csv to add frequency + split_mode if missing."""
+    """Ensure expenses.csv has frequency + split_mode columns (backward compatible)."""
     if not os.path.exists(EXPENSE_CSV):
         return
 
@@ -18,7 +40,7 @@ def migrate_expense_csv_if_needed():
         reader = csv.DictReader(f)
         fieldnames = reader.fieldnames or []
 
-        # Already new format
+        # Already in new format → nothing to do
         if "frequency" in fieldnames and "split_mode" in fieldnames:
             return
 
@@ -39,7 +61,7 @@ def migrate_expense_csv_if_needed():
         if "split_mode" in fieldnames:
             split_mode = row.get("split_mode", "income") or "income"
         else:
-            split_mode = "income"  # Standard: gehaltsabhängig
+            split_mode = "income"  # default: income-based split
 
         amount = row.get("amount", "0")
 
@@ -53,7 +75,6 @@ def migrate_expense_csv_if_needed():
             "amount": amount,
         })
 
-    # Overwrite with new structure
     with open(EXPENSE_CSV, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -73,7 +94,10 @@ def migrate_expense_csv_if_needed():
 
 
 def ensure_csv_files():
-    """Create or migrate CSV files."""
+    """Create/migrate CSV files in data/."""
+    ensure_data_dir()
+    migrate_old_csvs()
+
     if not os.path.exists(INCOME_CSV):
         with open(INCOME_CSV, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
@@ -130,14 +154,20 @@ def load_expenses():
                 row["amount"] = amount
 
                 # frequency
-                freq_raw = row.get("frequency") if "frequency" in fieldnames else None
+                if "frequency" in fieldnames:
+                    freq_raw = row.get("frequency")
+                else:
+                    freq_raw = None
                 freq = (freq_raw or "monthly").strip().lower()
                 if freq not in ("monthly", "quarterly", "yearly"):
                     freq = "monthly"
                 row["frequency"] = freq
 
                 # split mode: income (gehaltsabhängig) oder equal (50:50)
-                mode_raw = row.get("split_mode") if "split_mode" in fieldnames else None
+                if "split_mode" in fieldnames:
+                    mode_raw = row.get("split_mode")
+                else:
+                    mode_raw = None
                 split_mode = (mode_raw or "income").strip().lower()
                 if split_mode not in ("income", "equal"):
                     split_mode = "income"
@@ -237,7 +267,7 @@ def dashboard():
     katharina_income = sum(i["amount"] for i in incomes if i.get("person") == "Katharina")
     income_two = andreas_income + katharina_income
 
-    # Kindergeld (oder andere explizite Familien-Einnahmen, die keiner Person zugeordnet werden)
+    # Kindergeld als Familien-Einnahme, die gemeinsame Kosten reduziert
     extra_family_income = sum(
         i["amount"] for i in incomes if i.get("person") == "Kindergeld Anton"
     )
@@ -245,13 +275,12 @@ def dashboard():
     # Netto-gemeinsame Kosten nach Abzug Kindergeld
     net_shared = max(shared_expenses_total - extra_family_income, 0.0)
 
-    # Wie stark werden die einzelnen gemeinsamen Ausgaben durch Kindergeld "entlastet"?
+    # Wie stark werden gemeinsame Ausgaben durch Kindergeld "entlastet"?
     if shared_expenses_total > 0:
         reduction_factor = net_shared / shared_expenses_total
     else:
         reduction_factor = 0.0
 
-    # Aufteilung nach 50:50 bzw. gehaltsabhängig, pro Konto
     andreas_by_account = defaultdict(float)
     katharina_by_account = defaultdict(float)
 
@@ -378,7 +407,6 @@ def add_expense():
 
         person_or_account = request.form.get("person_or_account")
         description = request.form.get("description")
-
         is_shared = "ja" if request.form.get("is_shared") == "on" else "nein"
 
         frequency = (request.form.get("frequency") or "monthly").strip().lower()
@@ -406,7 +434,6 @@ def add_expense():
 
 @app.route("/edit_income/<int:index>", methods=["GET", "POST"])
 def edit_income(index):
-    """Edit an existing income entry by its index in the list."""
     ensure_csv_files()
     incomes = load_incomes()
 
@@ -432,7 +459,6 @@ def edit_income(index):
 
 @app.route("/edit_expense/<int:index>", methods=["GET", "POST"])
 def edit_expense(index):
-    """Edit an existing expense entry by its index in the list."""
     ensure_csv_files()
     expenses = load_expenses()
 
