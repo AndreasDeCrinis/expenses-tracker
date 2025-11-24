@@ -12,6 +12,7 @@
         .summary-boxes { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; }
         .box { background: #fff; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); min-width: 220px; }
         .box span.value { font-size: 1.4rem; font-weight: bold; display: block; margin-top: 0.3rem; }
+        .small { font-size: 0.85rem; color: #555; line-height: 1.4; }
         .positive { color: #27ae60; }
         .negative { color: #c0392b; }
         a.button { display: inline-block; padding: 0.4rem 0.8rem; background: #3498db; color: #fff; text-decoration: none; border-radius: 4px; margin-right: 0.5rem; }
@@ -39,12 +40,13 @@
             Jährliche und vierteljährliche Beträge werden automatisch auf einen
             <strong>monatlichen Durchschnitt</strong> umgerechnet.
         </p>
-        <ul>
-            <li>Gesamte monatliche Einnahmen und Ausgaben (inkl. Umrechnung)</li>
-            <li>Gemeinsame Fixkosten (markierte Ausgaben)</li>
-            <li>Wieviel Andreas und Katharina jeweils zu den Fixkosten beitragen sollen
-                (proportional zu ihrem Einkommen, abzüglich Kindergeld / Großeltern-Einnahmen).</li>
-        </ul>
+        <p>
+            Gemeinsame Fixkosten kannst du entweder
+            <strong>50:50</strong> oder <strong>gehaltsabhängig</strong> aufteilen.
+            Kindergeld reduziert zuerst die Summe der gemeinsamen Fixkosten.
+            Danach wird der verbleibende Betrag entsprechend der gewählten Aufteilungsart
+            auf Andreas und Katharina verteilt.
+        </p>
     </section>
 
     <section class="summary-boxes">
@@ -57,16 +59,21 @@
             <span class="value negative">{{ "%.2f"|format(total_expense) }} €</span>
         </div>
         <div class="box">
-            <strong>Gemeinsame Fixkosten (monatlich)</strong>
+            <strong>Gemeinsame Fixkosten (monatlich, vor Kindergeld)</strong>
             <span class="value negative">{{ "%.2f"|format(shared_expenses) }} €</span>
+            <div class="small">
+                Davon 50:50: {{ "%.2f"|format(equal_shared) }} € (nach Kindergeld-Anteil)<br>
+                Davon gehaltsabhängig: {{ "%.2f"|format(income_shared) }} € (nach Kindergeld-Anteil)
+            </div>
         </div>
         <div class="box">
-            <strong>Sonstige Familieneinnahmen (z.B. Kindergeld, Großeltern)</strong>
+            <strong>Kindergeld & andere Familienleistungen</strong>
             <span class="value positive">{{ "%.2f"|format(extra_family_income) }} €</span>
+            <div class="small">reduziert die gemeinsamen Fixkosten</div>
         </div>
         <div class="box">
-            <strong>Fixkosten nach Abzug dieser Einnahmen</strong>
-            <span class="value negative">{{ "%.2f"|format(cost_to_split) }} €</span>
+            <strong>Gemeinsame Fixkosten nach Kindergeld</strong>
+            <span class="value negative">{{ "%.2f"|format(net_shared) }} €</span>
         </div>
         <div class="box">
             <strong>Saldo (Einnahmen - Ausgaben)</strong>
@@ -86,24 +93,20 @@
             <span class="value">{{ "%.2f"|format(katharina_income) }} €</span>
         </div>
         <div class="box">
-            <strong>Beitrag Andreas zu Fixkosten</strong>
-            <span class="value">
-                {% if andreas_share is not none %}
-                    {{ "%.2f"|format(andreas_share) }} €
-                {% else %}
-                    – 
-                {% endif %}
-            </span>
+            <strong>Beitrag Andreas zu Fixkosten (gesamt)</strong>
+            <span class="value">{{ "%.2f"|format(andreas_share_total) }} €</span>
+            <div class="small">
+                50:50-Anteil: {{ "%.2f"|format(andreas_share_equal) }} €<br>
+                gehaltsabhängiger Anteil: {{ "%.2f"|format(andreas_share_income) }} €
+            </div>
         </div>
         <div class="box">
-            <strong>Beitrag Katharina zu Fixkosten</strong>
-            <span class="value">
-                {% if katharina_share is not none %}
-                    {{ "%.2f"|format(katharina_share) }} €
-                {% else %}
-                    – 
-                {% endif %}
-            </span>
+            <strong>Beitrag Katharina zu Fixkosten (gesamt)</strong>
+            <span class="value">{{ "%.2f"|format(katharina_share_total) }} €</span>
+            <div class="small">
+                50:50-Anteil: {{ "%.2f"|format(katharina_share_equal) }} €<br>
+                gehaltsabhängiger Anteil: {{ "%.2f"|format(katharina_share_income) }} €
+            </div>
         </div>
     </section>
 
@@ -161,6 +164,7 @@
                     <th>Person / Konto</th>
                     <th>Beschreibung</th>
                     <th>Gemeinsame Fixkosten?</th>
+                    <th>Aufteilung</th>
                     <th>Intervall</th>
                     <th>Betrag (Intervall €)</th>
                     <th>Betrag monatlich (€)</th>
@@ -174,6 +178,17 @@
                     <td>{{ e.person_or_account }}</td>
                     <td>{{ e.description }}</td>
                     <td>{{ e.is_shared }}</td>
+                    <td>
+                        {% if e.is_shared != "ja" %}
+                            –
+                        {% else %}
+                            {% if e.split_mode == "equal" %}
+                                50:50
+                            {% else %}
+                                gehaltsabhängig
+                            {% endif %}
+                        {% endif %}
+                    </td>
                     <td>
                         {% if e.frequency == "yearly" %}
                             jährlich
@@ -191,7 +206,38 @@
                 </tr>
             {% endfor %}
             {% if expenses|length == 0 %}
-                <tr><td colspan="8">Noch keine Ausgaben erfasst.</td></tr>
+                <tr><td colspan="9">Noch keine Ausgaben erfasst.</td></tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </section>
+
+    <section class="table-wrapper">
+        <h2>Überweisungsübersicht</h2>
+        <p class="small">
+            Hier siehst du, wieviel jeder von euch auf die gemeinsamen Konten überweisen muss.
+            Beträge sind bereits monatliche Durchschnittswerte und berücksichtigen Kindergeld.
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Konto</th>
+                    <th>Andreas überweist (€)</th>
+                    <th>Katharina überweist (€)</th>
+                    <th>Summe (€)</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in transfer_overview %}
+                <tr>
+                    <td>{{ row.account }}</td>
+                    <td style="text-align:right;">{{ "%.2f"|format(row.andreas) }}</td>
+                    <td style="text-align:right;">{{ "%.2f"|format(row.katharina) }}</td>
+                    <td style="text-align:right;">{{ "%.2f"|format(row.total) }}</td>
+                </tr>
+            {% endfor %}
+            {% if transfer_overview|length == 0 %}
+                <tr><td colspan="4">Noch keine gemeinsamen Konten mit Fixkosten erfasst.</td></tr>
             {% endif %}
             </tbody>
         </table>

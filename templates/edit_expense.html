@@ -15,7 +15,6 @@
         .inline { display:flex; align-items:center; gap:0.4rem; margin-top:0.6rem; }
         a { display:inline-block; margin-top:1rem; text-decoration:none; color:#3498db; }
         a:hover { text-decoration:underline; }
-        .hint { font-size:0.9rem; color:#555; margin-bottom:0.5rem; }
         .small { font-size:0.85rem; color:#666; }
     </style>
 </head>
@@ -75,6 +74,19 @@
             <option value="quarterly" {% if expense.frequency == "quarterly" %}selected{% endif %}>vierteljährlich</option>
             <option value="yearly" {% if expense.frequency == "yearly" %}selected{% endif %}>jährlich</option>
         </select>
+
+        <label for="split_mode">Aufteilung (für gemeinsame Fixkosten)</label>
+        <select id="split_mode" name="split_mode">
+            <option value="income" {% if expense.split_mode == "income" %}selected{% endif %}>
+                gehaltsabhängig (nach Einkommen)
+            </option>
+            <option value="equal" {% if expense.split_mode == "equal" %}selected{% endif %}>
+                50:50
+            </option>
+        </select>
+        <span class="small">
+            Die Aufteilung wird nur verwendet, wenn „gemeinsame Fixkosten“ aktiviert ist.
+        </span>
 
         <label for="amount">Betrag pro Intervall (€)</label>
         <input type="number" id="amount" name="amount" step="0.01" min="0"
