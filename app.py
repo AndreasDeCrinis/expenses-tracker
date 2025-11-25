@@ -6,22 +6,25 @@ from collections import defaultdict
 app = Flask(__name__)
 
 # -------------------------------------------------------------------
-# CSV paths in data/ subfolder
+# Paths (alles in data/ Unterordner)
 # -------------------------------------------------------------------
 DATA_DIR = "data"
 INCOME_CSV = os.path.join(DATA_DIR, "incomes.csv")
 EXPENSE_CSV = os.path.join(DATA_DIR, "expenses.csv")
+ACCOUNTS_CSV = os.path.join(DATA_DIR, "accounts.csv")
 
 
+# -------------------------------------------------------------------
+# Helpers: Ordner & Migration
+# -------------------------------------------------------------------
 def ensure_data_dir():
-    """Make sure the data/ directory exists."""
     os.makedirs(DATA_DIR, exist_ok=True)
 
 
 def migrate_old_csvs():
     """
-    If old CSVs in project root exist and there are no files in data/ yet,
-    move them into data/.
+    Falls alte incomes.csv / expenses.csv im Projekt-Root existieren,
+    verschiebe sie einmalig in den data/ Ordner.
     """
     old_incomes = "incomes.csv"
     old_expenses = "expenses.csv"
@@ -33,12 +36,37 @@ def migrate_old_csvs():
         os.rename(old_expenses, EXPENSE_CSV)
 
 
+def migrate_income_csv_if_needed():
+    """Sorge dafür, dass incomes.csv eine 'account'-Spalte hat."""
+    if not os.path.exists(INCOME_CSV):
+        return
+
+    with open(INCOME_CSV, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames or []
+
+        if "account" in fieldnames:
+            return  # schon im neuen Format
+
+        rows = list(reader)
+
+    # altes Format: person, source, amount → erweitern um account
+    with open(INCOME_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["person", "source", "amount", "account"])
+        for r in rows:
+            writer.writerow([
+                r.get("person", ""),
+                r.get("source", ""),
+                r.get("amount", "0"),
+                "",  # account leer
+            ])
+
+
 def migrate_expense_csv_if_needed():
     """
-    Ensure expenses.csv has columns:
-    category, person_or_account, description, is_shared,
-    frequency, split_mode, amount, paid_from_account
-    (backwards compatible).
+    Sorge dafür, dass expenses.csv die Spalten
+    frequency, split_mode, paid_from_account hat (rückwärtskompatibel).
     """
     if not os.path.exists(EXPENSE_CSV):
         return
@@ -51,7 +79,7 @@ def migrate_expense_csv_if_needed():
         has_split_mode = "split_mode" in fieldnames
         has_paid_from = "paid_from_account" in fieldnames
 
-        # already full schema
+        # schon vollständiges Schema
         if has_frequency and has_split_mode and has_paid_from:
             return
 
@@ -77,7 +105,6 @@ def migrate_expense_csv_if_needed():
         if has_paid_from:
             paid_from_account = row.get("paid_from_account") or person_or_account
         else:
-            # default: assume it is paid from the same account that was stored previously
             paid_from_account = person_or_account
 
         amount = row.get("amount", "0")
@@ -113,16 +140,39 @@ def migrate_expense_csv_if_needed():
             ])
 
 
+def ensure_accounts_file():
+    """Erzeuge accounts.csv mit Standardkonten, falls noch nicht vorhanden."""
+    if os.path.exists(ACCOUNTS_CSV):
+        return
+
+    default_accounts = [
+        "Gemeinsames Fixkosten-Konto",
+        "Gemeinsames Lebensmittel-Konto",
+        "Andreas Konto",
+        "Katharina Konto",
+        "Sonstiges Konto",
+    ]
+    with open(ACCOUNTS_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["name"])
+        for acc in default_accounts:
+            writer.writerow([acc])
+
+
 def ensure_csv_files():
-    """Create/migrate CSV files in data/."""
+    """Initialisiere alle CSVs & führe Migrationen aus."""
     ensure_data_dir()
     migrate_old_csvs()
 
+    # incomes
     if not os.path.exists(INCOME_CSV):
         with open(INCOME_CSV, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow(["person", "source", "amount"])
+            writer.writerow(["person", "source", "amount", "account"])
+    else:
+        migrate_income_csv_if_needed()
 
+    # expenses
     if not os.path.exists(EXPENSE_CSV):
         with open(EXPENSE_CSV, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
@@ -134,9 +184,42 @@ def ensure_csv_files():
     else:
         migrate_expense_csv_if_needed()
 
+    # accounts
+    ensure_accounts_file()
 
+
+# -------------------------------------------------------------------
+# Laden / Speichern: Accounts
+# -------------------------------------------------------------------
+def load_accounts():
+    if not os.path.exists(ACCOUNTS_CSV):
+        return []
+    accounts = []
+    with open(ACCOUNTS_CSV, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            name = (row.get("name") or "").strip()
+            if name:
+                accounts.append(name)
+    return accounts
+
+
+def append_account(name: str):
+    name = (name or "").strip()
+    if not name:
+        return
+    accounts = load_accounts()
+    if name in accounts:
+        return
+    with open(ACCOUNTS_CSV, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([name])
+
+
+# -------------------------------------------------------------------
+# Laden / Speichern: Incomes & Expenses
+# -------------------------------------------------------------------
 def load_incomes():
-    """Load all monthly income rows, skipping broken/empty ones."""
     incomes = []
     if not os.path.exists(INCOME_CSV):
         return incomes
@@ -150,6 +233,7 @@ def load_incomes():
                     continue
                 amount = float(str(raw).replace(",", "."))
                 row["amount"] = amount
+                row["account"] = row.get("account", "")
                 incomes.append(row)
             except (ValueError, TypeError, KeyError):
                 continue
@@ -157,7 +241,6 @@ def load_incomes():
 
 
 def load_expenses():
-    """Load all expense rows, compute monthly equivalents, skip broken/empty ones."""
     expenses = []
     if not os.path.exists(EXPENSE_CSV):
         return expenses
@@ -174,25 +257,21 @@ def load_expenses():
                 amount = float(str(raw).replace(",", "."))
                 row["amount"] = amount
 
-                # frequency
                 freq_raw = row.get("frequency") if "frequency" in fieldnames else None
                 freq = (freq_raw or "monthly").strip().lower()
                 if freq not in ("monthly", "quarterly", "yearly"):
                     freq = "monthly"
                 row["frequency"] = freq
 
-                # split mode: income (gehaltsabhängig) oder equal (50:50)
                 mode_raw = row.get("split_mode") if "split_mode" in fieldnames else None
                 split_mode = (mode_raw or "income").strip().lower()
                 if split_mode not in ("income", "equal"):
                     split_mode = "income"
                 row["split_mode"] = split_mode
 
-                # bezahlt von Konto
                 paid_from = row.get("paid_from_account") if "paid_from_account" in fieldnames else None
                 row["paid_from_account"] = paid_from or row.get("person_or_account", "")
 
-                # monatliches Äquivalent
                 if freq == "yearly":
                     monthly_amount = amount / 12.0
                 elif freq == "quarterly":
@@ -208,20 +287,19 @@ def load_expenses():
 
 
 def save_incomes(incomes):
-    """Overwrite incomes.csv with the provided list of income dicts."""
     with open(INCOME_CSV, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["person", "source", "amount"])
+        writer.writerow(["person", "source", "amount", "account"])
         for row in incomes:
             writer.writerow([
                 row.get("person", ""),
                 row.get("source", ""),
                 row.get("amount", 0),
+                row.get("account", ""),
             ])
 
 
 def save_expenses(expenses):
-    """Overwrite expenses.csv with the provided list of expense dicts."""
     with open(EXPENSE_CSV, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -243,7 +321,6 @@ def save_expenses(expenses):
 
 
 def group_sum(records, key_field: str):
-    """Group by key_field and sum the 'amount' field."""
     summary = {}
     for r in records:
         key = r.get(key_field, "Unbekannt") or "Unbekannt"
@@ -252,6 +329,9 @@ def group_sum(records, key_field: str):
     return summary
 
 
+# -------------------------------------------------------------------
+# Routes
+# -------------------------------------------------------------------
 @app.route("/")
 def index():
     return redirect(url_for("dashboard"))
@@ -270,7 +350,7 @@ def dashboard():
 
     income_by_person = group_sum(incomes, "person")
 
-    # Ausgaben für das Diagramm: monatliche Beträge pro Kategorie
+    # Ausgaben für Charts: nach Kategorie
     expenses_for_chart = []
     for e in expenses:
         clone = dict(e)
@@ -278,25 +358,23 @@ def dashboard():
         expenses_for_chart.append(clone)
     expense_by_category = group_sum(expenses_for_chart, "category")
 
-    # Gemeinsame Ausgaben (flag is_shared == "ja")
+    # Gemeinsame Ausgaben
     shared_expenses_total = sum(
         e["monthly_amount"] for e in expenses if e.get("is_shared") == "ja"
     )
 
-    # Einkommen von Andreas & Katharina
+    # Einkommen Andreas & Katharina
     andreas_income = sum(i["amount"] for i in incomes if i.get("person") == "Andreas")
     katharina_income = sum(i["amount"] for i in incomes if i.get("person") == "Katharina")
     income_two = andreas_income + katharina_income
 
-    # Kindergeld als Familien-Einnahme, die gemeinsame Kosten reduziert
+    # Kindergeld & Co.
     extra_family_income = sum(
         i["amount"] for i in incomes if i.get("person") == "Kindergeld Anton"
     )
 
-    # Netto-gemeinsame Kosten nach Abzug Kindergeld
     net_shared = max(shared_expenses_total - extra_family_income, 0.0)
 
-    # Reduktionsfaktor für jede einzelne gemeinsame Ausgabe
     if shared_expenses_total > 0:
         reduction_factor = net_shared / shared_expenses_total
     else:
@@ -310,7 +388,6 @@ def dashboard():
     andreas_income_total = 0.0
     katharina_income_total = 0.0
 
-    # Nur zur Anzeige: Anteile 50:50 vs. gehaltsabhängig (nach Kindergeld)
     equal_shared_before = sum(
         e["monthly_amount"]
         for e in expenses
@@ -337,7 +414,6 @@ def dashboard():
         mode = e.get("split_mode", "income")
 
         if income_two <= 0:
-            # Fallback: wenn kein Einkommen hinterlegt → 50:50
             mode = "equal"
 
         if mode == "equal":
@@ -345,7 +421,7 @@ def dashboard():
             k_share = base / 2.0
             andreas_equal_total += a_share
             katharina_equal_total += k_share
-        else:  # gehaltsabhängig
+        else:
             a_share = base * (andreas_income / income_two) if income_two > 0 else base / 2.0
             k_share = base * (katharina_income / income_two) if income_two > 0 else base / 2.0
             andreas_income_total += a_share
@@ -357,10 +433,10 @@ def dashboard():
     andreas_share_total = andreas_equal_total + andreas_income_total
     katharina_share_total = katharina_equal_total + katharina_income_total
 
-    # Übersicht: wer überweist wieviel auf welches Konto
-    accounts = sorted(set(andreas_by_account.keys()) | set(katharina_by_account.keys()))
+    # Überweisungsübersicht
+    accounts_list = sorted(set(andreas_by_account.keys()) | set(katharina_by_account.keys()))
     transfer_overview = []
-    for acc in accounts:
+    for acc in accounts_list:
         a = andreas_by_account.get(acc, 0.0)
         k = katharina_by_account.get(acc, 0.0)
         transfer_overview.append({
@@ -396,28 +472,90 @@ def dashboard():
     )
 
 
+@app.route("/accounts", methods=["GET", "POST"])
+def accounts():
+    ensure_csv_files()
+    if request.method == "POST":
+        name = request.form.get("name")
+        append_account(name)
+        return redirect(url_for("accounts"))
+
+    accounts_list = load_accounts()
+    return render_template("accounts.html", accounts=accounts_list)
+
+
+@app.route("/accounts/edit/<int:index>", methods=["GET", "POST"])
+def edit_account(index):
+    ensure_csv_files()
+
+    accounts = load_accounts()
+    if index < 0 or index >= len(accounts):
+        return redirect(url_for("accounts"))
+
+    old_name = accounts[index]
+
+    if request.method == "POST":
+        new_name = (request.form.get("name") or "").strip()
+        if new_name and new_name != old_name:
+
+            # 1. Accounts-Datei aktualisieren
+            accounts[index] = new_name
+            with open(ACCOUNTS_CSV, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["name"])
+                for a in accounts:
+                    writer.writerow([a])
+
+            # 2. Einnahmen aktualisieren
+            incomes = load_incomes()
+            changed = False
+            for inc in incomes:
+                if inc.get("account") == old_name:
+                    inc["account"] = new_name
+                    changed = True
+            if changed:
+                save_incomes(incomes)
+
+            # 3. Ausgaben aktualisieren
+            expenses = load_expenses()
+            changed = False
+            for exp in expenses:
+                if exp.get("paid_from_account") == old_name:
+                    exp["paid_from_account"] = new_name
+                    changed = True
+            if changed:
+                save_expenses(expenses)
+
+        return redirect(url_for("accounts"))
+
+    return render_template("edit_account.html", index=index, old_name=old_name)
+
+
 @app.route("/add_income", methods=["GET", "POST"])
 def add_income():
     ensure_csv_files()
+    accounts_list = load_accounts()
 
     if request.method == "POST":
         person = request.form.get("person")
         source = request.form.get("source")
         amount_raw = request.form.get("amount") or "0"
         amount = float(str(amount_raw).replace(",", "."))
+        account = request.form.get("income_account") or ""
 
         with open(INCOME_CSV, "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow([person, source, amount])
+            writer.writerow([person, source, amount, account])
 
         return redirect(url_for("dashboard"))
 
-    return render_template("add_income.html")
+    return render_template("add_income.html", accounts=accounts_list)
 
 
 @app.route("/add_expense", methods=["GET", "POST"])
 def add_expense():
     ensure_csv_files()
+    accounts_list = load_accounts()
 
     if request.method == "POST":
         category = request.form.get("category") or ""
@@ -453,13 +591,14 @@ def add_expense():
 
         return redirect(url_for("dashboard"))
 
-    return render_template("add_expense.html")
+    return render_template("add_expense.html", accounts=accounts_list)
 
 
 @app.route("/edit_income/<int:index>", methods=["GET", "POST"])
 def edit_income(index):
     ensure_csv_files()
     incomes = load_incomes()
+    accounts_list = load_accounts()
 
     if index < 0 or index >= len(incomes):
         return redirect(url_for("dashboard"))
@@ -470,21 +609,25 @@ def edit_income(index):
         amount_raw = request.form.get("amount") or "0"
         amount = float(str(amount_raw).replace(",", "."))
 
+        account = request.form.get("income_account") or ""
+
         incomes[index]["person"] = person
         incomes[index]["source"] = source
         incomes[index]["amount"] = amount
+        incomes[index]["account"] = account
 
         save_incomes(incomes)
         return redirect(url_for("dashboard"))
 
     income = incomes[index]
-    return render_template("edit_income.html", income=income, index=index)
+    return render_template("edit_income.html", income=income, index=index, accounts=accounts_list)
 
 
 @app.route("/edit_expense/<int:index>", methods=["GET", "POST"])
 def edit_expense(index):
     ensure_csv_files()
     expenses = load_expenses()
+    accounts_list = load_accounts()
 
     if index < 0 or index >= len(expenses):
         return redirect(url_for("dashboard"))
@@ -545,6 +688,7 @@ def edit_expense(index):
         expense=expense,
         index=index,
         base_categories=base_categories,
+        accounts=accounts_list,
     )
 
 

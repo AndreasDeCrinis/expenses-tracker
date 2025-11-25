@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <title>Konten verwalten</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; background:#f4f4f4; margin:0; padding:0; }
+        main { max-width: 600px; margin: 2rem auto; background:#fff; padding:1.5rem; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1);}
+        h1 { margin-top:0; }
+        label { display:block; margin-top:0.6rem; }
+        input { width:100%; padding:0.4rem; margin-top:0.2rem; box-sizing:border-box; }
+        button { margin-top:1rem; padding:0.5rem 1rem; background:#3498db; color:#fff; border:none; border-radius:4px; cursor:pointer; }
+        button:hover { background:#2980b9; }
+        table { width:100%; border-collapse:collapse; margin-top:1rem; }
+        th, td { padding:0.4rem 0.5rem; border-bottom:1px solid #eee; font-size:0.9rem; }
+        th { background:#ecf0f1; text-align:left; }
+        a { color:#3498db; text-decoration:none; }
+        a:hover { text-decoration:underline; }
+        .hint { font-size:0.9rem; color:#555; margin-bottom:0.5rem; }
+        .back-link { display:inline-block; margin-top:1rem; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Konten verwalten</h1>
+    <p class="hint">
+        Hier kannst du neue Konten hinzufügen und bestehende Konten umbenennen.
+        Änderungen werden automatisch bei allen Einnahmen und Ausgaben übernommen,
+        die dieses Konto verwenden.
+    </p>
+
+    <h2>Bestehende Konten</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Konto</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for acc in accounts %}
+            <tr>
+                <td>
+                    {{ acc }}<br>
+                    <a href="{{ url_for('edit_account', index=loop.index0) }}">
+                        Umbenennen
+                    </a>
+                </td>
+            </tr>
+        {% endfor %}
+        {% if accounts|length == 0 %}
+            <tr><td>Noch keine Konten vorhanden.</td></tr>
+        {% endif %}
+        </tbody>
+    </table>
+
+    <h2>Neues Konto hinzufügen</h2>
+    <form method="post">
+        <label for="name">Kontoname</label>
+        <input type="text" id="name" name="name" placeholder="z.B. Andreas Tagesgeld, Sparkonto Anton" required>
+        <button type="submit">Konto hinzufügen</button>
+    </form>
+
+    <a href="{{ url_for('dashboard') }}" class="back-link">Zurück zum Dashboard</a>
+</main>
+</body>
+</html>

@@ -50,21 +50,17 @@
         <select id="person_or_account" name="person_or_account" required>
             <option value="">Bitte auswählen</option>
             <option value="Familie (gemeinsam)" {% if expense.person_or_account == "Familie (gemeinsam)" %}selected{% endif %}>Familie (gemeinsam)</option>
-            <option value="Gemeinsames Fixkosten-Konto" {% if expense.person_or_account == "Gemeinsames Fixkosten-Konto" %}selected{% endif %}>Gemeinsames Fixkosten-Konto</option>
-            <option value="Gemeinsames Lebensmittel-Konto" {% if expense.person_or_account == "Gemeinsames Lebensmittel-Konto" %}selected{% endif %}>Gemeinsames Lebensmittel-Konto</option>
-            <option value="Andreas Konto" {% if expense.person_or_account == "Andreas Konto" %}selected{% endif %}>Andreas Konto</option>
-            <option value="Katharina Konto" {% if expense.person_or_account == "Katharina Konto" %}selected{% endif %}>Katharina Konto</option>
-            <option value="Sonstiges Konto" {% if expense.person_or_account == "Sonstiges Konto" %}selected{% endif %}>Sonstiges Konto</option>
+            <option value="Andreas persönlich" {% if expense.person_or_account == "Andreas persönlich" %}selected{% endif %}>Andreas persönlich</option>
+            <option value="Katharina persönlich" {% if expense.person_or_account == "Katharina persönlich" %}selected{% endif %}>Katharina persönlich</option>
+            <option value="Sonstiges" {% if expense.person_or_account == "Sonstiges" %}selected{% endif %}>Sonstiges</option>
         </select>
 
         <label for="paid_from_account">Bezahlt von Konto</label>
         <select id="paid_from_account" name="paid_from_account" required>
             <option value="">Bitte auswählen</option>
-            <option value="Gemeinsames Fixkosten-Konto" {% if expense.paid_from_account == "Gemeinsames Fixkosten-Konto" %}selected{% endif %}>Gemeinsames Fixkosten-Konto</option>
-            <option value="Gemeinsames Lebensmittel-Konto" {% if expense.paid_from_account == "Gemeinsames Lebensmittel-Konto" %}selected{% endif %}>Gemeinsames Lebensmittel-Konto</option>
-            <option value="Andreas Konto" {% if expense.paid_from_account == "Andreas Konto" %}selected{% endif %}>Andreas Konto</option>
-            <option value="Katharina Konto" {% if expense.paid_from_account == "Katharina Konto" %}selected{% endif %}>Katharina Konto</option>
-            <option value="Sonstiges Konto" {% if expense.paid_from_account == "Sonstiges Konto" %}selected{% endif %}>Sonstiges Konto</option>
+            {% for acc in accounts %}
+                <option value="{{ acc }}" {% if expense.paid_from_account == acc %}selected{% endif %}>{{ acc }}</option>
+            {% endfor %}
         </select>
 
         <label for="description">Beschreibung (optional)</label>

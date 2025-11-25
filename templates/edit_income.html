@@ -20,19 +20,25 @@
 <main>
     <h1>Einnahme bearbeiten</h1>
     <form method="post">
-        <label for="person">Person</label>
+        <label for="person">Person / Quelle</label>
         <select id="person" name="person" required>
             <option value="">Bitte auswählen</option>
             <option value="Andreas" {% if income.person == "Andreas" %}selected{% endif %}>Andreas</option>
             <option value="Katharina" {% if income.person == "Katharina" %}selected{% endif %}>Katharina</option>
             <option value="Kindergeld Anton" {% if income.person == "Kindergeld Anton" %}selected{% endif %}>Kindergeld Anton</option>
-            <option value="Großmutter" {% if income.person == "Großmutter" %}selected{% endif %}>Großmutter</option>
-            <option value="Großvater" {% if income.person == "Großvater" %}selected{% endif %}>Großvater</option>
             <option value="Sonstige" {% if income.person == "Sonstige" %}selected{% endif %}>Sonstige</option>
         </select>
 
-        <label for="source">Quelle / Beschreibung</label>
+        <label for="source">Beschreibung</label>
         <input type="text" id="source" name="source" value="{{ income.source }}" required>
+
+        <label for="income_account">Einnahme-Konto</label>
+        <select id="income_account" name="income_account">
+            <option value="">(kein Konto ausgewählt)</option>
+            {% for acc in accounts %}
+                <option value="{{ acc }}" {% if income.account == acc %}selected{% endif %}>{{ acc }}</option>
+            {% endfor %}
+        </select>
 
         <label for="amount">Betrag pro Monat (€)</label>
         <input type="number" id="amount" name="amount" step="0.01" min="0"

@@ -15,7 +15,7 @@
         .small { font-size: 0.85rem; color: #555; line-height: 1.4; }
         .positive { color: #27ae60; }
         .negative { color: #c0392b; }
-        a.button { display: inline-block; padding: 0.4rem 0.8rem; background: #3498db; color: #fff; text-decoration: none; border-radius: 4px; margin-right: 0.5rem; }
+        a.button { display: inline-block; padding: 0.4rem 0.8rem; background: #3498db; color: #fff; text-decoration: none; border-radius: 4px; margin-right: 0.5rem; margin-bottom: 0.5rem; }
         a.button:hover { background: #2980b9; }
         .charts { display: flex; flex-wrap: wrap; gap: 2rem; margin-top: 2rem; }
         .chart-container { background: #fff; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex: 1 1 320px; }
@@ -63,8 +63,8 @@
             <strong>Gemeinsame Fixkosten (monatlich, vor Kindergeld)</strong>
             <span class="value negative">{{ "%.2f"|format(shared_expenses) }} €</span>
             <div class="small">
-                Davon 50:50 (nach Kindergeld-Anteil): {{ "%.2f"|format(equal_shared) }} €<br>
-                Davon gehaltsabhängig (nach Kindergeld-Anteil): {{ "%.2f"|format(income_shared) }} €
+                50:50-Anteil (nach Kindergeld): {{ "%.2f"|format(equal_shared) }} €<br>
+                gehaltsabhängig (nach Kindergeld): {{ "%.2f"|format(income_shared) }} €
             </div>
         </div>
         <div class="box">
@@ -114,6 +114,7 @@
     <section>
         <a href="{{ url_for('add_income') }}" class="button">Monatliche Einnahme hinzufügen</a>
         <a href="{{ url_for('add_expense') }}" class="button">Fixkosten hinzufügen</a>
+        <a href="{{ url_for('accounts') }}" class="button">Konten verwalten</a>
     </section>
 
     <section class="charts">
@@ -134,6 +135,7 @@
                 <tr>
                     <th>Person</th>
                     <th>Quelle</th>
+                    <th>Konto</th>
                     <th>Betrag (€)</th>
                     <th>Aktion</th>
                 </tr>
@@ -143,6 +145,7 @@
                 <tr>
                     <td>{{ i.person }}</td>
                     <td>{{ i.source }}</td>
+                    <td>{{ i.account }}</td>
                     <td style="text-align:right;">{{ "%.2f"|format(i.amount) }}</td>
                     <td class="action-link">
                         <a href="{{ url_for('edit_income', index=loop.index0) }}">Bearbeiten</a>
@@ -150,7 +153,7 @@
                 </tr>
             {% endfor %}
             {% if incomes|length == 0 %}
-                <tr><td colspan="4">Noch keine Einnahmen erfasst.</td></tr>
+                <tr><td colspan="5">Noch keine Einnahmen erfasst.</td></tr>
             {% endif %}
             </tbody>
         </table>
