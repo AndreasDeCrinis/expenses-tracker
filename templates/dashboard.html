@@ -45,7 +45,8 @@
             <strong>50:50</strong> oder <strong>gehaltsabhängig</strong> aufteilen.
             Kindergeld reduziert zuerst die Summe der gemeinsamen Fixkosten.
             Danach wird der verbleibende Betrag entsprechend der gewählten Aufteilungsart
-            auf Andreas und Katharina verteilt.
+            auf Andreas und Katharina verteilt. Zusätzlich siehst du, wieviel
+            jeder von euch auf welche gemeinsamen Konten überweisen muss.
         </p>
     </section>
 
@@ -62,12 +63,12 @@
             <strong>Gemeinsame Fixkosten (monatlich, vor Kindergeld)</strong>
             <span class="value negative">{{ "%.2f"|format(shared_expenses) }} €</span>
             <div class="small">
-                Davon 50:50: {{ "%.2f"|format(equal_shared) }} € (nach Kindergeld-Anteil)<br>
-                Davon gehaltsabhängig: {{ "%.2f"|format(income_shared) }} € (nach Kindergeld-Anteil)
+                Davon 50:50 (nach Kindergeld-Anteil): {{ "%.2f"|format(equal_shared) }} €<br>
+                Davon gehaltsabhängig (nach Kindergeld-Anteil): {{ "%.2f"|format(income_shared) }} €
             </div>
         </div>
         <div class="box">
-            <strong>Kindergeld & andere Familienleistungen</strong>
+            <strong>Kindergeld & Familienleistungen</strong>
             <span class="value positive">{{ "%.2f"|format(extra_family_income) }} €</span>
             <div class="small">reduziert die gemeinsamen Fixkosten</div>
         </div>
@@ -161,7 +162,8 @@
             <thead>
                 <tr>
                     <th>Kategorie</th>
-                    <th>Person / Konto</th>
+                    <th>Person / Zuordnung</th>
+                    <th>Bezahlt von Konto</th>
                     <th>Beschreibung</th>
                     <th>Gemeinsame Fixkosten?</th>
                     <th>Aufteilung</th>
@@ -176,6 +178,7 @@
                 <tr>
                     <td>{{ e.category }}</td>
                     <td>{{ e.person_or_account }}</td>
+                    <td>{{ e.paid_from_account }}</td>
                     <td>{{ e.description }}</td>
                     <td>{{ e.is_shared }}</td>
                     <td>
@@ -206,7 +209,7 @@
                 </tr>
             {% endfor %}
             {% if expenses|length == 0 %}
-                <tr><td colspan="9">Noch keine Ausgaben erfasst.</td></tr>
+                <tr><td colspan="10">Noch keine Ausgaben erfasst.</td></tr>
             {% endif %}
             </tbody>
         </table>
@@ -215,8 +218,8 @@
     <section class="table-wrapper">
         <h2>Überweisungsübersicht</h2>
         <p class="small">
-            Hier siehst du, wieviel jeder von euch auf die gemeinsamen Konten überweisen muss.
-            Beträge sind bereits monatliche Durchschnittswerte und berücksichtigen Kindergeld.
+            Diese Tabelle zeigt, wieviel jeder von euch auf die jeweiligen Konten überweisen muss.
+            Die Beträge sind monatliche Durchschnittswerte und berücksichtigen das Kindergeld.
         </p>
         <table>
             <thead>

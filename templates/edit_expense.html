@@ -46,7 +46,7 @@
             Wenn hier etwas eingetragen ist, wird diese Kategorie verwendet und die Auswahl oben ignoriert.
         </span>
 
-        <label for="person_or_account">Person / Konto</label>
+        <label for="person_or_account">Person / Zuordnung</label>
         <select id="person_or_account" name="person_or_account" required>
             <option value="">Bitte auswählen</option>
             <option value="Familie (gemeinsam)" {% if expense.person_or_account == "Familie (gemeinsam)" %}selected{% endif %}>Familie (gemeinsam)</option>
@@ -55,6 +55,16 @@
             <option value="Andreas Konto" {% if expense.person_or_account == "Andreas Konto" %}selected{% endif %}>Andreas Konto</option>
             <option value="Katharina Konto" {% if expense.person_or_account == "Katharina Konto" %}selected{% endif %}>Katharina Konto</option>
             <option value="Sonstiges Konto" {% if expense.person_or_account == "Sonstiges Konto" %}selected{% endif %}>Sonstiges Konto</option>
+        </select>
+
+        <label for="paid_from_account">Bezahlt von Konto</label>
+        <select id="paid_from_account" name="paid_from_account" required>
+            <option value="">Bitte auswählen</option>
+            <option value="Gemeinsames Fixkosten-Konto" {% if expense.paid_from_account == "Gemeinsames Fixkosten-Konto" %}selected{% endif %}>Gemeinsames Fixkosten-Konto</option>
+            <option value="Gemeinsames Lebensmittel-Konto" {% if expense.paid_from_account == "Gemeinsames Lebensmittel-Konto" %}selected{% endif %}>Gemeinsames Lebensmittel-Konto</option>
+            <option value="Andreas Konto" {% if expense.paid_from_account == "Andreas Konto" %}selected{% endif %}>Andreas Konto</option>
+            <option value="Katharina Konto" {% if expense.paid_from_account == "Katharina Konto" %}selected{% endif %}>Katharina Konto</option>
+            <option value="Sonstiges Konto" {% if expense.paid_from_account == "Sonstiges Konto" %}selected{% endif %}>Sonstiges Konto</option>
         </select>
 
         <label for="description">Beschreibung (optional)</label>

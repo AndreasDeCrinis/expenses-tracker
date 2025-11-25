@@ -5,7 +5,9 @@ from collections import defaultdict
 
 app = Flask(__name__)
 
-# --- Store CSVs in data/ subfolder -----------------------------------
+# -------------------------------------------------------------------
+# CSV paths in data/ subfolder
+# -------------------------------------------------------------------
 DATA_DIR = "data"
 INCOME_CSV = os.path.join(DATA_DIR, "incomes.csv")
 EXPENSE_CSV = os.path.join(DATA_DIR, "expenses.csv")
@@ -18,8 +20,8 @@ def ensure_data_dir():
 
 def migrate_old_csvs():
     """
-    If old CSVs (incomes.csv / expenses.csv) exist in the project root
-    and there are no files in data/ yet, move them once.
+    If old CSVs in project root exist and there are no files in data/ yet,
+    move them into data/.
     """
     old_incomes = "incomes.csv"
     old_expenses = "expenses.csv"
@@ -32,7 +34,12 @@ def migrate_old_csvs():
 
 
 def migrate_expense_csv_if_needed():
-    """Ensure expenses.csv has frequency + split_mode columns (backward compatible)."""
+    """
+    Ensure expenses.csv has columns:
+    category, person_or_account, description, is_shared,
+    frequency, split_mode, amount, paid_from_account
+    (backwards compatible).
+    """
     if not os.path.exists(EXPENSE_CSV):
         return
 
@@ -40,8 +47,12 @@ def migrate_expense_csv_if_needed():
         reader = csv.DictReader(f)
         fieldnames = reader.fieldnames or []
 
-        # Already in new format → nothing to do
-        if "frequency" in fieldnames and "split_mode" in fieldnames:
+        has_frequency = "frequency" in fieldnames
+        has_split_mode = "split_mode" in fieldnames
+        has_paid_from = "paid_from_account" in fieldnames
+
+        # already full schema
+        if has_frequency and has_split_mode and has_paid_from:
             return
 
         rows = list(reader)
@@ -53,15 +64,21 @@ def migrate_expense_csv_if_needed():
         description = row.get("description", "")
         is_shared = row.get("is_shared", "nein")
 
-        if "frequency" in fieldnames:
-            frequency = row.get("frequency", "monthly") or "monthly"
+        if has_frequency:
+            frequency = (row.get("frequency") or "monthly").strip().lower()
         else:
             frequency = "monthly"
 
-        if "split_mode" in fieldnames:
-            split_mode = row.get("split_mode", "income") or "income"
+        if has_split_mode:
+            split_mode = (row.get("split_mode") or "income").strip().lower()
         else:
-            split_mode = "income"  # default: income-based split
+            split_mode = "income"
+
+        if has_paid_from:
+            paid_from_account = row.get("paid_from_account") or person_or_account
+        else:
+            # default: assume it is paid from the same account that was stored previously
+            paid_from_account = person_or_account
 
         amount = row.get("amount", "0")
 
@@ -73,13 +90,15 @@ def migrate_expense_csv_if_needed():
             "frequency": frequency,
             "split_mode": split_mode,
             "amount": amount,
+            "paid_from_account": paid_from_account,
         })
 
     with open(EXPENSE_CSV, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow([
             "category", "person_or_account", "description",
-            "is_shared", "frequency", "split_mode", "amount"
+            "is_shared", "frequency", "split_mode", "amount",
+            "paid_from_account",
         ])
         for r in new_rows:
             writer.writerow([
@@ -90,6 +109,7 @@ def migrate_expense_csv_if_needed():
                 r["frequency"],
                 r["split_mode"],
                 r["amount"],
+                r["paid_from_account"],
             ])
 
 
@@ -108,7 +128,8 @@ def ensure_csv_files():
             writer = csv.writer(f)
             writer.writerow([
                 "category", "person_or_account", "description",
-                "is_shared", "frequency", "split_mode", "amount"
+                "is_shared", "frequency", "split_mode", "amount",
+                "paid_from_account",
             ])
     else:
         migrate_expense_csv_if_needed()
@@ -154,24 +175,22 @@ def load_expenses():
                 row["amount"] = amount
 
                 # frequency
-                if "frequency" in fieldnames:
-                    freq_raw = row.get("frequency")
-                else:
-                    freq_raw = None
+                freq_raw = row.get("frequency") if "frequency" in fieldnames else None
                 freq = (freq_raw or "monthly").strip().lower()
                 if freq not in ("monthly", "quarterly", "yearly"):
                     freq = "monthly"
                 row["frequency"] = freq
 
                 # split mode: income (gehaltsabhängig) oder equal (50:50)
-                if "split_mode" in fieldnames:
-                    mode_raw = row.get("split_mode")
-                else:
-                    mode_raw = None
+                mode_raw = row.get("split_mode") if "split_mode" in fieldnames else None
                 split_mode = (mode_raw or "income").strip().lower()
                 if split_mode not in ("income", "equal"):
                     split_mode = "income"
                 row["split_mode"] = split_mode
+
+                # bezahlt von Konto
+                paid_from = row.get("paid_from_account") if "paid_from_account" in fieldnames else None
+                row["paid_from_account"] = paid_from or row.get("person_or_account", "")
 
                 # monatliches Äquivalent
                 if freq == "yearly":
@@ -207,7 +226,8 @@ def save_expenses(expenses):
         writer = csv.writer(f)
         writer.writerow([
             "category", "person_or_account", "description",
-            "is_shared", "frequency", "split_mode", "amount"
+            "is_shared", "frequency", "split_mode", "amount",
+            "paid_from_account",
         ])
         for row in expenses:
             writer.writerow([
@@ -218,6 +238,7 @@ def save_expenses(expenses):
                 row.get("frequency", "monthly"),
                 row.get("split_mode", "income"),
                 row.get("amount", 0),
+                row.get("paid_from_account", ""),
             ])
 
 
@@ -275,7 +296,7 @@ def dashboard():
     # Netto-gemeinsame Kosten nach Abzug Kindergeld
     net_shared = max(shared_expenses_total - extra_family_income, 0.0)
 
-    # Wie stark werden gemeinsame Ausgaben durch Kindergeld "entlastet"?
+    # Reduktionsfaktor für jede einzelne gemeinsame Ausgabe
     if shared_expenses_total > 0:
         reduction_factor = net_shared / shared_expenses_total
     else:
@@ -289,6 +310,7 @@ def dashboard():
     andreas_income_total = 0.0
     katharina_income_total = 0.0
 
+    # Nur zur Anzeige: Anteile 50:50 vs. gehaltsabhängig (nach Kindergeld)
     equal_shared_before = sum(
         e["monthly_amount"]
         for e in expenses
@@ -311,7 +333,7 @@ def dashboard():
         if base <= 0:
             continue
 
-        account = e.get("person_or_account") or "Unbekanntes Konto"
+        account = e.get("paid_from_account") or e.get("person_or_account") or "Unbekanntes Konto"
         mode = e.get("split_mode", "income")
 
         if income_two <= 0:
@@ -406,6 +428,7 @@ def add_expense():
             category = "Unkategorisiert"
 
         person_or_account = request.form.get("person_or_account")
+        paid_from_account = request.form.get("paid_from_account")
         description = request.form.get("description")
         is_shared = "ja" if request.form.get("is_shared") == "on" else "nein"
 
@@ -424,7 +447,8 @@ def add_expense():
             writer = csv.writer(f)
             writer.writerow([
                 category, person_or_account, description,
-                is_shared, frequency, split_mode, amount
+                is_shared, frequency, split_mode, amount,
+                paid_from_account,
             ])
 
         return redirect(url_for("dashboard"))
@@ -487,6 +511,7 @@ def edit_expense(index):
             category = "Unkategorisiert"
 
         person_or_account = request.form.get("person_or_account")
+        paid_from_account = request.form.get("paid_from_account")
         description = request.form.get("description")
         is_shared = "ja" if request.form.get("is_shared") == "on" else "nein"
 
@@ -503,6 +528,7 @@ def edit_expense(index):
 
         expenses[index]["category"] = category
         expenses[index]["person_or_account"] = person_or_account
+        expenses[index]["paid_from_account"] = paid_from_account
         expenses[index]["description"] = description
         expenses[index]["is_shared"] = is_shared
         expenses[index]["frequency"] = frequency
