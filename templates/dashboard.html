@@ -4,9 +4,12 @@
     <meta charset="utf-8">
     <title>Familienbudget – Fixkosten-Rechner</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% include "_app_icons.html" %}
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f4f4f4; }
         header { background: #2c3e50; color: #fff; padding: 1rem 2rem; }
+        header h1 { display: flex; align-items: center; gap: 0.65rem; }
+        .app-logo { width: 2.1rem; height: 2.1rem; border-radius: 0.6rem; box-shadow: 0 6px 16px rgba(0,0,0,0.24); flex: 0 0 auto; }
         main { padding: 1rem 2rem 3rem; max-width: 1200px; margin: 0 auto; }
         h1, h2 { margin-top: 0; }
         .summary-boxes { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; }
@@ -30,7 +33,10 @@
 </head>
 <body>
 <header>
-    <h1>Familienbudget – Fixkosten & Verteilung</h1>
+    <h1>
+        <img class="app-logo" src="{{ url_for('static', filename='logo.svg') }}" alt="" aria-hidden="true">
+        <span>Familienbudget – Fixkosten & Verteilung</span>
+    </h1>
 </header>
 <main>
     <section class="explanation">
